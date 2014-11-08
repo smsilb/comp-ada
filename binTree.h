@@ -15,9 +15,10 @@
   to other trees, and a character array to store a name
  */
 struct symbol {
-    int value, lower, upper, size, offset, depth;
+    int value, lower, upper, size, offset, depth, address;
     struct node *next, *pType, *cType;
     char *name, *kind, *mode;
+    //    struct exprNode* reg;
 };
 
 
