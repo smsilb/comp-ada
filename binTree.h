@@ -18,7 +18,7 @@ struct symbol {
     int value, lower, upper, size, offset, depth, address;
     struct node *next, *pType, *cType;
     char *name, *kind, *mode;
-    //    struct exprNode* reg;
+    struct memNode* reg;
 };
 
 
@@ -41,8 +41,9 @@ struct node {
   is why they are stack'Node's)
  */
 struct stackNode {
-  char* name;
-  struct node* root;
+    char* name;
+    struct node* root;
+    int ARsize;
 };
 
 typedef struct symbol symbol;
@@ -61,15 +62,16 @@ int top = 0;
 
 
 // pushed a new tree onto the stack, unless the stack is full
-push(char* name) {
+push(char* name, int offset) {
   stackNode temp;
   if (top < 999) {
-    top++;
-    temp.root = NULL;
-    temp.name = (char*)malloc(sizeof(name)+1);
-    strcpy(temp.name, name);
-    stack[top] = temp;
-    printf("Pushing scope for %s\n", name);
+      stack[top].ARsize = offset;
+      top++;
+      temp.root = NULL;
+      temp.name = (char*)malloc(sizeof(name)+1);
+      strcpy(temp.name, name);
+      stack[top] = temp;
+      printf("Pushing scope for %s\n", name);
   } else {
       yyerror("Stack is full and you, the end user, know what this means since you wrote this compiler\n");
   }
@@ -87,7 +89,7 @@ deleteNode(node* root) {
 
 // pops a tree off of the stack, and frees the memory associated
 // with it
-pop() {
+int pop() {
   if (top >= 0) {
     printf("Popping scope for %s\n", stack[top].name);
     if (stack[top].root != NULL) {
@@ -95,8 +97,10 @@ pop() {
     }
     deleteNode(stack[top].root);
     top--;
+    return stack[top].ARsize;
   } else {
     yyerror("Stack is empty\n");
+    return -1;
   }
 }
 

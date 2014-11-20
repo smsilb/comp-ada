@@ -11,23 +11,41 @@ typedef struct patchNode {
 
 patchNode *head = NULL, *tail = NULL;
 label *lhead = NULL, *ltail = NULL;
+label *raiseHead = NULL, *raiseTail = NULL;
 label* toPatch[100];
+label* raiseStack[100];
+int raiseTop = -1;
 int patchTop = -1;
+int inExceptionPart;
+int handlerDone;
+int jumpTable[100];
+int jumpCount = 0;
 
-pushPS() {
-    patchTop++;
-    toPatch[patchTop] = NULL;
-    lhead = ltail = toPatch[patchTop];
+pushPS(char c) {
+    if (c == 'p') {
+        patchTop++;
+        toPatch[patchTop] = NULL;
+        lhead = ltail = toPatch[patchTop];
+    } else if (c == 'e') {
+        raiseTop++;
+        raiseStack[raiseTop] = NULL;
+        raiseHead = raiseTail = raiseStack[raiseTop];
+    }
 }
 
-popPS(int patch) {
-    label *temp = lhead;
+popPS(int patch, char c) {
+    label *temp;
+    if (c == 'p') {
+        temp = lhead;
+    } else if (c == 'e') {
+        temp = raiseHead;
+    }
 
     while(temp != NULL) {
         tail->next = (patchNode*)malloc(sizeof(patchNode));
 
         tail = tail->next;
-
+        
         tail->address = temp->address;
         tail->val = patch;
         tail->next = NULL;
@@ -35,19 +53,31 @@ popPS(int patch) {
         temp = temp->next;
     }
 
-    patchTop--;
+    if (c == 'p') {
+        patchTop--;
 
-    if (patchTop >= 0 && toPatch[patchTop] != NULL) {
-        ltail = lhead = toPatch[patchTop];
+        if (patchTop >= 0 && toPatch[patchTop] != NULL) {
+            ltail = lhead = toPatch[patchTop];
 
-        while (ltail->next != NULL) {
-            ltail = ltail->next;
+            while (ltail->next != NULL) {
+                ltail = ltail->next;
+            }
+        }
+    } else if (c == 'e') {
+        raiseTop--;
+        
+        if (raiseTop >= 0 && raiseStack[raiseTop] != NULL) {
+            raiseTail = raiseHead = raiseStack[raiseTop];
+
+            while (raiseTail->next != NULL) {
+                raiseTail = raiseTail->next;
+            }
         }
     }
 }
 
 /*label* getRefLabel(char *labelName) {
-    label *temp = lhead;
+  label *temp = lhead;
 
     while(temp != NULL) {
         if (!strcmp(temp->name, labelName)) {
@@ -59,16 +89,34 @@ popPS(int patch) {
     return NULL;
     }*/
 
-addLabel(int address) {
-    if (lhead == NULL) {
-        lhead = toPatch[patchTop] = (label *)malloc(sizeof(label));
-        ltail = lhead;
-    } else {
-        ltail->next = (label *)malloc(sizeof(label));
-        ltail = ltail->next;
+addLabel(int address, char c) {
+    label *tHead, *tTail;
+    if (c == 'p') {
+        tHead = lhead;
+        tTail = ltail;
+    } else if (c == 'e') {
+        tHead = raiseHead;
+        tTail = raiseTail;
     }
-    ltail->address = address;
-    ltail->next = NULL;
+
+    if (tHead == NULL) {
+        tHead = toPatch[patchTop] = (label *)malloc(sizeof(label));
+        tTail = tHead;
+    } else {
+        tTail->next = (label *)malloc(sizeof(label));
+        tTail = tTail->next;
+    }
+
+    tTail->address = address;
+    tTail->next = NULL;
+
+    if (c == 'p') {
+        lhead = tHead;
+        ltail = tTail;
+    } else if (c == 'e') {
+        raiseHead = tHead;
+        raiseTail = tTail;
+    }
 }
 
 fixPatch(int address, int value) {
@@ -123,11 +171,10 @@ writePatches(char * inFile, int lineno) {
     char buffer[150];
     char * line = NULL;
     size_t len = 0;
-    ssize_t read;
     char s;
-    int i, j, linect = 0, count = 0;
+    int i, linect = 0;
 
-    while ((read = getline(&line, &len, fp)) != -1) {
+    while (getline(&line, &len, fp) != -1) {
         strcpy(buffer, line);
 
         for (i = 0; i < len; i++) {
@@ -145,6 +192,4 @@ writePatches(char * inFile, int lineno) {
 
     fclose(in);
     fclose(out);
-
-    unlink(inFile);
 }

@@ -1,5 +1,6 @@
 int tabs = 0;
 node *words = NULL;
+int next_exception = 2;
 
 printTabs(int tabs) {
     int i = 0;
@@ -55,7 +56,6 @@ printNode(node *root){
         printf(" of type %s", root->data.pType->data.name);
         printf(" with size %d and offset %d", root->data.size, root->data.offset);
     } else if (!strcmp(root->data.kind, "proc")) {
-        printf(". This is where the code starts: %d", root->data.offset);
         node *temp = root->data.next;
         while(temp != NULL){
             printf("\n");
@@ -83,6 +83,11 @@ symbol getEmptySymbol(){
     return sym;
 }
 
+int nextException() {
+    next_exception++;
+    return next_exception;
+}
+
 outerContext(){
     symbol oc;
     oc.name = mallocAndCpy("integer");
@@ -91,11 +96,6 @@ outerContext(){
     oc.offset = 0;
     addSymbol(oc);
 
-    oc.name = mallocAndCpy("MASTER_EXCPT");
-    oc.kind = mallocAndCpy("predefined");
-    oc.size = 0;
-    addSymbol(oc);
-    
     oc.name = mallocAndCpy("boolean");
     oc.kind = mallocAndCpy("predefined");
     addSymbol(oc);
@@ -103,6 +103,7 @@ outerContext(){
     oc.name = mallocAndCpy("true");
     oc.kind = mallocAndCpy("constant");
     oc.pType = getTypeNode("boolean");
+    oc.size = 0;
     oc.value = 1;
     addSymbol(oc);
     
@@ -118,6 +119,23 @@ outerContext(){
     oc.value = 12;
     addSymbol(oc);
 
+    oc.name = mallocAndCpy("CONSTRAINT_ERROR");
+    oc.kind = mallocAndCpy("exception");
+    oc.value = 1;
+    addSymbol(oc);
+
+    oc.name = mallocAndCpy("numeric_error");
+    oc.value = 2;
+    addSymbol(oc);
+
+    oc.name = mallocAndCpy("read");
+    oc.kind = mallocAndCpy("read_routine");
+    oc.pType = NULL;
+    addSymbol(oc);
+
+    oc.name = mallocAndCpy("write");
+    oc.kind = mallocAndCpy("write_routine");
+    addSymbol(oc);
 
     // add all the reserved words
     /* addReserved("is");
