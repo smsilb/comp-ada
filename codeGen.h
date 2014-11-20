@@ -351,10 +351,22 @@ void emitCopyIn(node *sym, memNode *parm, memNode *expr)
   helper function which differentiates between different type
   of parameters and copies data slightly differently depending
   on context
- */
+*/
 {
     if (!strcmp(sym->data.pType->data.name, "array")) {
-        
+        if (!strcmp(expr->kind, "address")) {
+            int i;
+            int elements = sym->data.pType->data.higher
+                - sym->data.pType->data.lower + 1;
+                
+            for (i = 0; i < elements; i++) {
+                emitAssign(parm, expr);
+                parm->offset->value++;
+                expr->offset->value++;
+            }
+        } else {
+            yyerror("Expression passed in place of array parameter");
+        }
     } else {
         emitAssign(parm, expr);
     }
@@ -394,7 +406,15 @@ void emitCopyOut(node *parm)
     address->offset->value = 0;
 
     if (!strcmp(parm->data.pType->data.name, "array")) {
-
+        int i;
+        int elements = parm->data.pType->data.higher
+            - parm->data.pType->data.lower + 1;
+                
+        for (i = 0; i < elements; i++) {
+            emitAssign(parm, expr);
+            address->offset->value++;
+            contents->offset->value++;
+        }
     } else {
         emitAssign(address, contents);
     }
