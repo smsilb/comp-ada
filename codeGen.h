@@ -39,13 +39,10 @@ void emitCopyOut(node *parm);
 char * getOffset(memNode *exp) 
 /*
   helper function that stringifies the 'offset' node of a node elsewhere
- */
+*/
 {
     char *offset;
-    if (exp->value == 0) {
-        offset = (char*)malloc(1);
-        sprintf(offset, "");
-    } else if (!strcmp(exp->kind, "register")) {
+    if (!strcmp(exp->kind, "register")) {
         offset = (char*)malloc(sizeof(exp->base + 4));
         sprintf(offset, ", r%d", exp->base);
     } else if (!strcmp(exp->kind, "number")) {
@@ -353,7 +350,7 @@ void emitCopyIn(node *sym, memNode *parm, memNode *expr)
   on context
 */
 {
-    if (!strcmp(sym->data.pType->data.name, "array")) {
+    if (!strcmp(sym->data.pType->data.kind, "array")) {
         if (!strcmp(expr->kind, "address")) {
             int i;
             int elements = sym->data.pType->data.upper
@@ -403,13 +400,16 @@ void emitCopyOut(node *parm)
     memNode *address = emitPrimId(parm);
     address->offset->value += parm->data.size - 1;
     address->base = getRegister(address);
+
+    //this is just for the sake of printing
     address->offset->value = 0;
 
-    if (!strcmp(parm->data.pType->data.name, "array")) {
+    if (!strcmp(parm->data.pType->data.kind, "array")) {
         int i;
         int elements = parm->data.pType->data.upper
             - parm->data.pType->data.lower + 1;
                 
+        fprintf(fp, "copying arrays\n");
         for (i = 0; i < elements; i++) {
             emitAssign(address, contents);
             address->offset->value++;

@@ -970,8 +970,6 @@ exception : EXCEPTION
     fprintf(fp, "%d: pc := r3, ?\n", instCt++);
 
    
-
-
     
     inExceptionPart = 1;
     handlerDone = 0;
@@ -1009,6 +1007,7 @@ excpt_stmt_list : excpt_stmt_list statement
     addLabel(instCt, 'r');
     emitJumpQ();
 }
+| statement
 ;
 
 choice_list : choice_list '|' ID 
@@ -1082,9 +1081,10 @@ node* addIdsToStack(idnodeptr idList, symbol ref) {
             } else if (!strcmp(prev->data.kind, "exception")) {
                 prev->data.value = nextException();
             } else if (!strcmp(prev->data.kind, "parm")) {
-                //parameters that will be copied in and out need an additional
+                //parameters that will be copied out need an additional
                 //space to store the address to copy to
-                if (!strcmp(prev->data.mode, "io")) {
+                if (!strcmp(prev->data.mode, "io")
+                    || !strcmp(prev->data.mode, "o")) {
                     prev->data.size++;
                 }
 

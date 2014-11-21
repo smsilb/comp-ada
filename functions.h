@@ -119,7 +119,7 @@ outerContext(){
     oc.value = 12;
     addSymbol(oc);
 
-    oc.name = mallocAndCpy("CONSTRAINT_ERROR");
+    oc.name = mallocAndCpy("constraint_error");
     oc.kind = mallocAndCpy("exception");
     oc.value = 1;
     addSymbol(oc);
