@@ -125,8 +125,9 @@ proc_head : proc_init '(' parameters ')'
             param->data.next = (node*)malloc(sizeof(node));
             param = param->data.next;//point to the new node
             param->data = temp->data;//copy the data
-            param->data.next = NULL;//point next to null
+            param->data.reg = NULL;
         }
+        param->data.next = NULL;
     } 
     $$ = $1;
 }
@@ -159,8 +160,6 @@ proc_body : begin stmt_list excpt_part END ';'
     offset = pop();
     tabs--;
     $$ = $1;
-    //printf("nested offset was %d, resetting offset to %d\n", offset, prevOffset);
-    //offset = prevOffset;
 }
 ;
 parameters :  id_list ':' mode type_name ';' parameters
@@ -488,7 +487,8 @@ call_stmt : ID '(' expr_list ')' optAssign ';'
                 }
                 temp = temp->next;
             }
-        } else if (!strcmp(proc->data.kind, "variable")) {
+        } else if (!strcmp(proc->data.kind, "variable")
+                   || !strcmp(proc->data.kind, "parm")) {
             memNode* id;
             id = emitPrimId(proc);
             id->offset->value -= proc->data.pType->data.lower;

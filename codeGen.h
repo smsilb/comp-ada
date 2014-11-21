@@ -356,7 +356,7 @@ void emitCopyIn(node *sym, memNode *parm, memNode *expr)
     if (!strcmp(sym->data.pType->data.name, "array")) {
         if (!strcmp(expr->kind, "address")) {
             int i;
-            int elements = sym->data.pType->data.higher
+            int elements = sym->data.pType->data.upper
                 - sym->data.pType->data.lower + 1;
                 
             for (i = 0; i < elements; i++) {
@@ -407,11 +407,11 @@ void emitCopyOut(node *parm)
 
     if (!strcmp(parm->data.pType->data.name, "array")) {
         int i;
-        int elements = parm->data.pType->data.higher
+        int elements = parm->data.pType->data.upper
             - parm->data.pType->data.lower + 1;
                 
         for (i = 0; i < elements; i++) {
-            emitAssign(parm, expr);
+            emitAssign(address, contents);
             address->offset->value++;
             contents->offset->value++;
         }
