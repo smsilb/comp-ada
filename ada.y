@@ -492,8 +492,11 @@ name : ID
 {
     $$ = (name*)malloc(sizeof(name));
     $$->sym = searchStack($1);
+    if (!strcmp($$->sym->data.kind, "variable")) {
+        $$->var = emitPrimId($$->sym);
+    }
+    $$->expr = NULL;
     $$->nestingDepth = 0;
-    $$->var = emitPrimId($$->sym);
 }
 | name '(' expr_list ')'
 {
@@ -501,6 +504,8 @@ name : ID
         if ($3->next == NULL) {
             int i = 0;
             node *temp = $1->sym->data.pType;
+
+            
 
             /*
               if the symbol is an var, not a procedure, we need to generally
