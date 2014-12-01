@@ -19,8 +19,7 @@
         memNode *expr;//holds the result of an expression when the
                       //symbol is a procedure
         memNode *var;//holds a memory node when symbol is an array 
-        int nestingDepth;//holds the number of indicies seen thus far
-        int totalDepth;//total number of nests in given array 
+        node *parent;//holds the parent type node when symbol is a variable
     } name;
     
 
@@ -36,7 +35,7 @@
 %type <memNode> simple_list simple_expr term_list expr_list
 %type <memNode> term factor_list factor primary_list primary
 %type <integer> NUMBER constant mult_op add_op bool_op rel_op
-%type <integer> const_expr loop choice_list handle_list
+%type <integer> const_expr loop 
 %type <var> ID EXCEPTION type_name
 %type <idList> id_list
 %type <mode> mode
@@ -494,17 +493,18 @@ name : ID
     $$->sym = searchStack($1);
     if (!strcmp($$->sym->data.kind, "variable")) {
         $$->var = emitPrimId($$->sym);
+        $$->parent = $$->sym->data.pType;
     }
     $$->expr = NULL;
-    $$->nestingDepth = 0;
 }
 | name '(' expr_list ')'
 {
     if (!strcmp($1->sym->data.kind, "variable")) {
         if ($3->next == NULL) {
             int i = 0;
-            node *temp = $1->sym->data.pType;
-
+            node *temp = $1->parent;
+            memNode *expr = $3;
+            name *pName = $1;
             
 
             /*
@@ -514,30 +514,27 @@ name : ID
               In order to do so, we need to multiply the expression by
               the size of this element, stored in its component type
             */
-            
-            while(temp != NULL) {
-                if ($1->totalDepth - i == $1->nestingDepth) {
-                    if ($1->var->offset->constant + $3->constant == 0) {
-                        $1->var->offset->value += ($3->value  - 1) * temp->data.size;
-                    } else {
-                        memNode *size = (memNode*)malloc(sizeof(memNode));
-                        size->kind = mallocAndCpy("number");
-                    
-                        //take advantage of size to do necessary subtraction
-                        size->value = 1;
-                        $3 = emitAddSub($3, size, -1);
 
-                        //multiply the result by the real size
-                        size->value = temp->data.size;
-                        $3 = emitMulDiv($3, size, 1);
-                        $1->var->offset = emitAddSub($1->var->offset, $3, 1);
-                    }
-                
-                    break;
-                }
-                i++;
-                temp = temp->data.cType;
+            if (pName->var->offset->constant + expr->constant == 0) {
+                pName->var->offset->value += (expr->value  - temp->data.lower) 
+                    * temp->data.size;
+            } else {
+                memNode *size = (memNode*)malloc(sizeof(memNode));
+                size->kind = mallocAndCpy("number");
+                    
+                //take advantage of size to do necessary subtraction
+                size->value = temp->data.lower;
+                expr = emitAddSub(expr, size, -1);
+
+                //multiply the result by the real size
+                size->value = temp->data.size;
+                expr = emitMulDiv(expr, size, 1);
+                pName->var->offset = emitAddSub(pName->var->offset, expr, 1);
             }
+                    
+               
+            pName->parent = temp->data.cType;
+            $$ = pName;
         } else {
             yyerror("Too many expression in array access");
         }
@@ -552,609 +549,612 @@ name : ID
 }
 ;
 
- optAssign : ASSIGN expression
-    {
-        $$ = $2;
-    }
-    |
+optAssign : ASSIGN expression
+{
+    $$ = $2;
+}
+|
     {
         $$ = NULL;
     }
-    ;
+;
 
- expr_list : expression ',' expr_list
-    {
-        $1->next = $3;
-        $$ = $1;
-    }
-    | expression 
-      {
-          $1->next = NULL;
-          $$ = $1;
-      }
-    ;
+expr_list : expression ',' expr_list
+{
+    $1->next = $3;
+    $$ = $1;
+}
+| expression 
+{
+    $1->next = NULL;
+    $$ = $1;
+}
+;
 
- loop_stmt : loop loop_stmt_list ENDLOOP ';' 
-    {
-        emitJump($1);
-        popPS(instCt, 'p');
-    }
-    ;
+loop_stmt : loop loop_stmt_list ENDLOOP ';' 
+{
+    emitJump($1);
+    popPS(instCt, 'p');
+}
+;
 
- loop : LOOP 
-    {
-        $$ = instCt;
-        pushPS('p');
-    }
-    ;
+loop : LOOP 
+{
+    $$ = instCt;
+    pushPS('p');
+}
+;
 
- loop_stmt_list : statement loop_stmt_list 
-    {
-    }
-    | exit loop_stmt_list
-    {
-    }
-    |
-          ;              
+loop_stmt_list : statement loop_stmt_list 
+{
+}
+| exit loop_stmt_list
+{
+}
+|
+;              
 
- exit : EXIT ';' 
-    {
-        addLabel(instCt, 'p');
+exit : EXIT ';' 
+{
+    addLabel(instCt, 'p');
 
-        emitJumpQ();
-    }
-    | EXITWHEN condition ';' 
-    {
-        emitJumpTrue($2);
-        addLabel(instCt - 1, 'p');
-    }
-    ;
+    emitJumpQ();
+}
+| EXITWHEN condition ';' 
+{
+    emitJumpTrue($2);
+    addLabel(instCt - 1, 'p');
+}
+;
 
- if_stmt : if_head elsif else_clause ENDIF ';' 
-    {
-        popPS(instCt, 'p');
-    }
-    ;
+if_stmt : if_head elsif else_clause ENDIF ';' 
+{
+    popPS(instCt, 'p');
+    popPS(instCt, 'p');
+}
+;
 
- if_head : if THEN stmt_list 
-                   {
-                       addLabel(instCt, 'p');
-                       emitJumpQ();
-                   }
-    ;
+if_head : if THEN stmt_list 
+{
+    popPS(instCt + 1, 'p');
+    addLabel(instCt, 'p');
+    emitJumpQ();
+    pushPS('p');
+}
+;
 
-    if : IF condition
-            {
-                pushPS('p');
+if : IF condition
+{
+    pushPS('p');
+    pushPS('p');
 
-                //this is kind of an unfortunate case where 
-                //we need to reference a line either 2 ahead or 1 behind
-                //of the function call. so we subtract 1
-                emitJumpFalse($2);
-                addLabel(instCt - 1, 'p');
-            }
-    ;
+    //this is kind of an unfortunate case where 
+    //we need to reference a line either 2 ahead or 1 behind
+    //of the function call. so we subtract 1
+    emitJumpFalse($2);
+    addLabel(instCt - 1, 'p');
+}
+;
 
- elsif : elsif elseif_head THEN stmt_list
-    {
-        addLabel(instCt, 'p');
-        emitJumpQ();
-    }
-    | 
+elsif : elsif elseif_head THEN stmt_list
+{
+    popPS(instCt + 1, 'p');
+    addLabel(instCt, 'p');
+    emitJumpQ();
+    pushPS('p');
+}
+| 
     {}
-    ;
+;
 
- elseif_head : ELSEIF condition
-    {
-        //i'm really not sure why these are two higher than
-        //they should be.....
-        //maybe its because we've already emitted a jump in the previous
-        //if/elseif
+elseif_head : ELSEIF condition
+{
+    //i'm really not sure why these are two higher than
+    //they should be.....
+    //maybe its because we've already emitted a jump in the previous
+    //if/elseif
 
-        //the first pop is for the statements inside the then body,
-        //the second is for the branch jump at the beginning
-        popPS(instCt - 2, 'p');
-        pushPS('p');
-        emitJumpFalse($2);
-        addLabel(instCt - 1, 'p');
+    //the first pop is for the statements inside the then body,
+    //the second is for the branch jump at the beginning
+    popPS(instCt - 2, 'p');
+    pushPS('p');
+    emitJumpFalse($2);
+    addLabel(instCt - 1, 'p');
+}
+;
+
+else_clause  : else_head stmt_list 
+{
+    addLabel(instCt, 'p');
+    emitJumpQ();
+}
+| 
+{}
+;
+
+else_head : ELSE
+{
+    popPS(instCt, 'p');
+    pushPS('p');
+}
+;
+
+raise_stmt : RAISE ID ';' 
+{
+    node *excpt = searchStack($2);
+
+    if (excpt == NULL) {
+        yyerror("Undeclared exception raised");
+    } else {
+        emitRaise(excpt->data.value);
+        addLabel(instCt - 1, 'e');
     }
-    ;
-
- else_clause  : else_head stmt_list 
-    {
-        addLabel(instCt, 'p');
-        emitJumpQ();
-    }
-    | 
-    {}
-    ;
-
- else_head : ELSE
-    {
-        popPS(instCt, 'p');
-        pushPS('p');
-    }
-    ;
-
- raise_stmt : RAISE ID ';' 
-    {
-        node *excpt = searchStack($2);
-
-        if (excpt == NULL) {
-            yyerror("Undeclared exception raised");
-        } else {
-            emitRaise(excpt->data.value);
-            addLabel(instCt - 1, 'e');
-        }
-    }
+}
 
 
- condition : expression 
-    {
+condition : expression 
+{
+    $$ = $1;
+}
+;
+
+expression : rel_list 
+{
+    $$ = $1;
+}
+;
+
+rel_list: rel_list bool_op relation 
+{
+    if ($1->constant + $3->constant == 0) {
         $$ = $1;
+        $$->value = (1 - $2) * ($1->value && $3->value) + $2 * ($1->value || $3->value);
+    } else {
+        $$ = emitBooP($1, $3, $2);
     }
-    ;
+}
+| relation 
+{
+    $$ = $1;
+}
+;
 
- expression : rel_list 
-    {
+bool_op : AND 
+{
+    $$ = 0;
+}
+| OR 
+{
+    $$ = 1;
+}
+;
+
+relation : simple_list 
+{
+    $$ = $1;
+}
+;
+
+simple_list : simple_list rel_op simple_expr 
+{
+    if ($1->constant + $3->constant == 0) {
         $$ = $1;
-    }
-    ;
-
- rel_list: rel_list bool_op relation 
-    {
-        if ($1->constant + $3->constant == 0) {
-            $$ = $1;
-            $$->value = (1 - $2) * ($1->value && $3->value) + $2 * ($1->value || $3->value);
-        } else {
-            $$ = emitBooP($1, $3, $2);
+        switch($2){
+        case 1:
+            $$->value = $1->value == $3->value;
+            break;
+        case 2:
+            $$->value = $1->value != $3->value;
+            break;
+        case 3:
+            $$->value = $1->value < $3->value;
+            break;
+        case 6:
+            $$->value = $1->value <= $3->value;
+            break;
+        case 5:
+            $$->value = $1->value > $3->value;
+            break;
+        case 4:
+            $$->value = $1->value >= $3->value;
+            break;
         }
+    } else {
+        $$ = emitRelOp($1, $3, $2);
     }
-    | relation 
-      {
-          $$ = $1;
-      }
-    ;
+}
+| simple_expr 
+{
+    $$ = $1;
+}
+;
 
- bool_op : AND 
-    {
-        $$ = 0;
+rel_op : EQ 
+{
+    $$ = 1;
+}
+| NEQ 
+{
+    $$ = 2;
+}
+| LT 
+{
+    $$ = 3;
+}
+| GT 
+{
+    $$ = 4;
+}
+| LTE 
+{
+    $$ = 5;
+}
+| GTE 
+{
+    $$ = 6;
+}
+;
+
+simple_expr : '-' term_list 
+{
+    if ($2->constant == 0) {
+        $$ = $2;
+        $$->value = $2->value * -1;
+    } else {
+        $$ = emitNeg($2);
     }
-    | OR 
-      {
-          $$ = 1;
-      }
-    ;
+}
+| term_list 
+{
+    $$ = $1;
+}
+;
 
- relation : simple_list 
-    {
+term_list : term_list add_op term 
+{
+    if ($1->constant + $3->constant == 0) {
+        //by multiplying the term
+        //by the add_op, we can choose
+        //between + and -
         $$ = $1;
+        $$->value = $1->value + ($2 * $3->value);
+    } else {
+        $$ = emitAddSub($1, $3, $2);
     }
-    ;
+}
+| term 
+{
+    $$ = $1;
+}
+;
 
- simple_list : simple_list rel_op simple_expr 
-    {
-        if ($1->constant + $3->constant == 0) {
-            $$ = $1;
-            switch($2){
-            case 1:
-                $$->value = $1->value == $3->value;
-                break;
-            case 2:
-                $$->value = $1->value != $3->value;
-                break;
-            case 3:
-                $$->value = $1->value < $3->value;
-                break;
-            case 6:
-                $$->value = $1->value <= $3->value;
-                break;
-            case 5:
-                $$->value = $1->value > $3->value;
-                break;
-            case 4:
-                $$->value = $1->value >= $3->value;
-                break;
-            }
-        } else {
-            $$ = emitRelOp($1, $3, $2);
-        }
-    }
-    | simple_expr 
-      {
-          $$ = $1;
-      }
-    ;
+add_op : '+' 
+{
+    $$ = 1;
+}
+| '-' 
+{
+    $$ = -1;
+}
+;
 
- rel_op : EQ 
-    {
-        $$ = 1;
-    }
-    | NEQ 
-      {
-          $$ = 2;
-      }
-    | LT 
-      {
-          $$ = 3;
-      }
-    | GT 
-      {
-          $$ = 4;
-      }
-    | LTE 
-      {
-          $$ = 5;
-      }
-    | GTE 
-      {
-          $$ = 6;
-      }
-    ;
+term : factor_list 
+{
+    $$ = $1;
+}
+;
 
- simple_expr : '-' term_list 
-    {
-        if ($2->constant == 0) {
-            $$ = $2;
-            $$->value = $2->value * -1;
-        } else {
-            $$ = emitNeg($2);
-        }
-    }
-    | term_list 
-      {
-          $$ = $1;
-      }
-    ;
-
- term_list : term_list add_op term 
-    {
-        if ($1->constant + $3->constant == 0) {
-            //by multiplying the term
-            //by the add_op, we can choose
-            //between + and -
-            $$ = $1;
-            $$->value = $1->value + ($2 * $3->value);
-        } else {
-            $$ = emitAddSub($1, $3, $2);
-        }
-    }
-    | term 
-      {
-          $$ = $1;
-      }
-    ;
-
- add_op : '+' 
-    {
-        $$ = 1;
-    }
-    | '-' 
-      {
-          $$ = -1;
-      }
-    ;
-
- term : factor_list 
-    {
+factor_list : factor_list mult_op factor 
+{
+    if ($1->constant + $3->constant == 0) {
+        //by raising the factor to the power from
+        //the mult_op, we can choose between * and /
         $$ = $1;
-    }
-    ;
-
- factor_list : factor_list mult_op factor 
-    {
-        if ($1->constant + $3->constant == 0) {
-            //by raising the factor to the power from
-            //the mult_op, we can choose between * and /
-            $$ = $1;
-            $$->value = $1->value * pow($3->value, $2);
+        $$->value = $1->value * pow($3->value, $2);
+    } else {
+        if ($2 == 1) {
+            $$ = emitMulDiv($1, $3, $2);
         } else {
-            if ($2 == 1) {
-                $$ = emitMulDiv($1, $3, $2);
-            } else {
-                $$ = emitMulDiv($1, $3, $2);
-            }
+            $$ = emitMulDiv($1, $3, $2);
         }
     }
-    | factor 
-      {
-          $$ = $1;
-      }
-    ;
+}
+| factor 
+{
+    $$ = $1;
+}
+;
 
- mult_op : '*' 
-    {
-        $$ = 1;
+mult_op : '*' 
+{
+    $$ = 1;
+}
+| '/' 
+{
+    $$ = -1;
+}
+;
+
+factor : primary_list 
+{
+    $$ = $1;
+}
+| NOT primary 
+{
+    if ($2->constant == 0) {
+        $$ = $2;
+        $$->value = -1 * $2->value;
+    } else {
+        $$ = emitNot($2);
     }
-    | '/' 
-      {
-          $$ = -1;
-      }
-    ;
+}
+;
 
- factor : primary_list 
-    {
+primary_list : primary_list EXP primary 
+{
+    if ($1->constant + $3->constant == 0) {
         $$ = $1;
+        $$->value = pow($1->value, $3->value);
+    } else {
+        $$ = emitExp($1, $3);
     }
-    | NOT primary 
-    {
-        if ($2->constant == 0) {
-            $$ = $2;
-            $$->value = -1 * $2->value;
-        } else {
-            $$ = emitNot($2);
-        }
-    }
-    ;
-
- primary_list : primary_list EXP primary 
-    {
-        if ($1->constant + $3->constant == 0) {
-            $$ = $1;
-            $$->value = pow($1->value, $3->value);
-        } else {
-            $$ = emitExp($1, $3);
-        }
  
     
-    }
-    | primary 
-      {
-          $$ = $1;
-      }
-    ;
+}
+| primary 
+{
+    $$ = $1;
+}
+;
 
- primary : NUMBER 
-    {
-        $$ = emitPrimNum($1);
-    }
-    | ID 
-      {
-          node *idPtr = searchStack($1);
-          if (idPtr == NULL) {
-              char mes[200];
-              sprintf(mes, "Var: %s is not defined in this context", $1);
-              yyerror(mes);
-          } else {
-              if (!strcmp(idPtr->data.kind, "constant")) {
-                  $$ = emitPrimNum(idPtr->data.value);
-              } else {
-                  $$ = emitPrimId(idPtr);
-              }
-          }
-      }
-    | ID '(' expression  ')'
-      {
-          node *idPtr = searchStack($1);
-          if (idPtr == NULL) {
-              char mes[200];
-              sprintf(mes, "Var: %s is not defined in this context", $1);
-              yyerror(mes);
-          } else {
-              $$ = emitPrimId(idPtr);
-              $$->offset->value -= idPtr->data.pType->data.lower;
-
-              if ($3->constant == 0) {
-                  $$->offset->value += $3->value;
-              } else {
-                  $$->offset = emitAddSub($3, $$->offset, 1);
-              }
-          } 
-      }
-    | '(' expression ')' 
-      {
-          $$ = $2;
-      }
-    ;
-
- excpt_part : exception handle_list 
-    {
-        //pop the jumps to the table at the beginning
-        popPS(instCt, 'p');
-
-        jumpTable[0] = instCt + next_exception;
-
-        if ($2 == 0) {
-            int i;
-            for (i = 1; i <= next_exception; i++) {
-                if (jumpTable[i] == 0) {
-                    jumpTable[i] = jumpTable[0];
-                }
-            }
+primary : NUMBER 
+{
+    $$ = emitPrimNum($1);
+}
+| ID 
+{
+    node *idPtr = searchStack($1);
+    if (idPtr == NULL) {
+        char mes[200];
+        sprintf(mes, "Var: %s is not defined in this context", $1);
+        yyerror(mes);
+    } else {
+        if (!strcmp(idPtr->data.kind, "constant")) {
+            $$ = emitPrimNum(idPtr->data.value);
+        } else {
+            $$ = emitPrimId(idPtr);
         }
+    }
+}
+| ID '(' expression  ')'
+{
+    node *idPtr = searchStack($1);
+    if (idPtr == NULL) {
+        char mes[200];
+        sprintf(mes, "Var: %s is not defined in this context", $1);
+        yyerror(mes);
+    } else {
+        $$ = emitPrimId(idPtr);
+        $$->offset->value -= idPtr->data.pType->data.lower;
 
+        if ($3->constant == 0) {
+            $$->offset->value += $3->value;
+        } else {
+            $$->offset = emitAddSub($3, $$->offset, 1);
+        }
+    } 
+}
+| '(' expression ')' 
+{
+    $$ = $2;
+}
+;
+
+excpt_part : exception handle_list 
+{
+    //pop the jumps to the table at the beginning
+    popPS(instCt, 'p');
+
+    jumpTable[0] = instCt + next_exception;
+
+    if (!handlerDone) {
         int i;
         for (i = 1; i <= next_exception; i++) {
-            emitJump(jumpTable[i]);
+            if (jumpTable[i] == 0) {
+                jumpTable[i] = jumpTable[0];
+            }
         }
-
-        //pop the jumps after the table after
-        popPS(instCt, 'p');
-        popPS(instCt, 'e');
     }
-    | 
-    {
-        popPS(instCt, 'e');
+
+    int i;
+    for (i = 1; i <= next_exception; i++) {
+        emitJump(jumpTable[i]);
     }
-    ;
 
- exception : EXCEPTION
-    {
-        //push a scope and emit a jump to the regular return line
-        //this will be executed when there are no exceptions raised
-        pushPS('p');
-        addLabel(instCt, 'p');
-        emitJumpQ();
+    //pop the jumps after the table after
+    popPS(instCt, 'p');
+    popPS(instCt, 'e');
+}
+| 
+{
+    popPS(instCt, 'e');
+}
+;
 
-        //pop a scope to patch the jump to this line 
-        //from the raise statements above
-        popPS(instCt, 'e');
+exception : EXCEPTION
+{
+    //push a scope and emit a jump to the regular return line
+    //this will be executed when there are no exceptions raised
+    pushPS('p');
+    addLabel(instCt, 'p');
+    emitJumpQ();
 
-        //push a scope for the jumps from exceptions to the return line
-        pushPS('e');
+    //pop a scope to patch the jump to this line 
+    //from the raise statements above
+    popPS(instCt, 'e');
 
-        //push a scope for the jump to the table
-        pushPS('p');
+    //push a scope for the jumps from exceptions to the return line
+    pushPS('e');
 
-        //this is the jump to the jump table
-        addLabel(instCt, 'p');
-        fprintf(fp, "%d: pc := r3, ?\n", instCt++);
+    //push a scope for the jump to the table
+    pushPS('p');
+
+    //this is the jump to the jump table
+    addLabel(instCt, 'p');
+    fprintf(fp, "%d: pc := r3, ?\n", instCt++);
 
    
     
-        inExceptionPart = 1;
-        handlerDone = 0;
+    inExceptionPart = 1;
+    handlerDone = 0;
 
-        int i;
-        for (i = 1; i < 100; i++) {
-            jumpTable[i] = 0;
+    int i;
+    for (i = 1; i < 100; i++) {
+        jumpTable[i] = 0;
+    }
+}
+;
+
+handle_list : handle_list WHEN choice_list ARROW excpt_stmt_list
+{
+    //probably need to change this to right recursive and 
+    //check whether or not there is an 'others'
+    emitHandle();
+    addLabel(instCt - 1, 'e');
+}
+| WHEN choice_list ARROW excpt_stmt_list 
+{
+    emitHandle();
+    addLabel(instCt - 1, 'e');
+}
+;
+
+excpt_stmt_list : excpt_stmt_list statement
+| excpt_stmt_list RAISE ';'
+{
+    //reraising the current exception functions by jumping
+    //out of the exception part
+    addLabel(instCt, 'r');
+    emitJumpQ();
+}
+| statement
+;
+
+choice_list : choice_list '|' ID 
+{
+    if (!handlerDone) {
+        node *excpt = searchStack($3);
+
+        if (!strcmp(excpt->data.kind, "exception")) {
+            jumpTable[excpt->data.value] = instCt;
         }
     }
-    ;
-
- handle_list : handle_list WHEN choice_list ARROW excpt_stmt_list
-    {
-        //probably need to change this to right recursive and 
-        //check whether or not there is an 'others'
-        emitHandle();
-        addLabel(instCt - 1, 'e');
-
-        $$  = $1 + $3;
-    }
-    | WHEN choice_list ARROW excpt_stmt_list 
-    {
-        emitHandle();
-        addLabel(instCt - 1, 'e');
-
-        $$ = $2;
-    }
-    ;
-
- excpt_stmt_list : excpt_stmt_list statement
-        | excpt_stmt_list RAISE ';'
-    {
-        //reraising the current exception functions by jumping
-        //out of the exception part
-        addLabel(instCt, 'r');
-        emitJumpQ();
-    }
-    | statement
-          ;
-
- choice_list : choice_list '|' ID 
-    {
-        if (!handlerDone) {
-            node *excpt = searchStack($3);
-
+}
+| ID 
+{
+    if (!handlerDone) {
+        node *excpt = searchStack($1);
+        
+        if (excpt != NULL) {
             if (!strcmp(excpt->data.kind, "exception")) {
                 jumpTable[excpt->data.value] = instCt;
             }
+        } else {
+            yyerror("Illegal handler for undeclared exception");
         }
-        $$ = 0;
+    } else {
+        yyerror("Exception handler declared after 'OTHERS' declaration");
     }
-    | ID 
-      {
-          if (!handlerDone) {
-              node *excpt = searchStack($1);
-        
-              if (excpt != NULL) {
-                  if (!strcmp(excpt->data.kind, "exception")) {
-                      jumpTable[excpt->data.value] = instCt;
-                  }
-              } else {
-                  yyerror("Illegal handler for undeclared exception");
-              }
-          }
-          $$ = 0;
-      }
-    | OTHERS 
-      {
-          if (!handlerDone) {
-              int i;
-              handlerDone = 1;
+}
+| OTHERS 
+{
+    if (!handlerDone) {
+        int i;
+        handlerDone = 1;
 
-              for (i = 1; i <= next_exception; i++) {
-                  if (jumpTable[i] == 0) {
-                      jumpTable[i] = instCt;
-                  }
-              }
-          }
-          $$ = 1;
-      }
+        for (i = 1; i <= next_exception; i++) {
+            if (jumpTable[i] == 0) {
+                jumpTable[i] = instCt;
+            }
+        }
+    } else {
+        yyerror("Multiple 'OTHERS' declarations");
+    }
+}
 
 
-    %%
+%%
 
-          extern int lineno;
-          extern int error;
+extern int lineno;
+extern int error;
 
-          idnodeptr currentList = NULL;
+idnodeptr currentList = NULL;
 
-          node* addIdsToStack(idnodeptr idList, symbol ref) {
-              idnodeptr temp = idList;
-              node* next = ref.next;
-              node* prev = NULL;
+node* addIdsToStack(idnodeptr idList, symbol ref) {
+    idnodeptr temp = idList;
+    node* next = ref.next;
+    node* prev = NULL;
 
-              while(temp->next != NULL) {
-                  ref.name = mallocAndCpy(temp->name);
-                  ref.offset = offset;
+    while(temp->next != NULL) {
+        ref.name = mallocAndCpy(temp->name);
+        ref.offset = offset;
     
-                  if (prev == NULL) {
-                      prev = addSymbol(ref);
-                  } else {
-                      prev->data.next = addSymbol(ref);
-                      prev = prev->data.next;
-                  }
+        if (prev == NULL) {
+            prev = addSymbol(ref);
+        } else {
+            prev->data.next = addSymbol(ref);
+            prev = prev->data.next;
+        }
 
-                  if (prev != NULL) {
-                      if (!strcmp(prev->data.kind, "variable")) {
-                          offset += prev->data.size;
-                      } else if (!strcmp(prev->data.kind, "exception")) {
-                          prev->data.value = nextException();
-                      } else if (!strcmp(prev->data.kind, "parm")) {
-                          //parameters that will be copied out need an additional
-                          //space to store the address to copy to
-                          if (!strcmp(prev->data.mode, "io")
-                              || !strcmp(prev->data.mode, "o")) {
-                              prev->data.size++;
-                          }
+        if (prev != NULL) {
+            if (!strcmp(prev->data.kind, "variable")) {
+                offset += prev->data.size;
+            } else if (!strcmp(prev->data.kind, "exception")) {
+                prev->data.value = nextException();
+            } else if (!strcmp(prev->data.kind, "parm")) {
+                //parameters that will be copied out need an additional
+                //space to store the address to copy to
+                if (!strcmp(prev->data.mode, "io")
+                    || !strcmp(prev->data.mode, "o")) {
+                    prev->data.size++;
+                }
 
-                          offset += prev->data.size;
-                      }
-                  }
+                offset += prev->data.size;
+            }
+        }
 
-                  temp = temp->next;
-              }
+        temp = temp->next;
+    }
     
-              if (prev != NULL) {
-                  prev->data.next = next;
-              } else {
-                  return NULL;
-              }
+    if (prev != NULL) {
+        prev->data.next = next;
+    } else {
+        return NULL;
+    }
 
-              return search(stack[top].root, idList->name);
-          }
+    return search(stack[top].root, idList->name);
+}
 
-          main()
-          {
+main()
+{
 
-              fp = fopen ("joe.sucks", "w+");
-              //fp = fopen("out.txt", "w+");
+    fp = fopen ("joe.sucks", "w+");
+    //fp = fopen("out.txt", "w+");
    
-              printf("Outer context\n");
-              outerContext();
-              printNode(stack[0].root);
-              yyparse();
+    printf("Outer context\n");
+    outerContext();
+    printNode(stack[0].root);
+    yyparse();
 
-              fclose(fp);
+    fclose(fp);
     
-              unlink("out.txt");
+    unlink("out.txt");
 
-              if (!error) {
-                  writePatches("joe.sucks", lineno);
-              }
+    if (!error) {
+        writePatches("joe.sucks", lineno);
+    }
 
-              unlink("joe.sucks");
+    unlink("joe.sucks");
     
-              return(0);
-          }
+    return(0);
+}
