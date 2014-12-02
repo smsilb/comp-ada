@@ -111,7 +111,7 @@ proc_spec : proc_head IS decl_part proc_body
         if ($1->data.next != NULL) {
             emitParamCopyOut($1);
         }
-
+        
         emitReturn();
     }
 }
@@ -473,6 +473,8 @@ call_stmt : name optAssign ';'
             emitParamCopyIn(proc, temp, baseReg);
 
             emitProcJump(proc, baseReg);
+            addLabel(instCt, 'e');
+            emitExcpStateCheck();
         }
     }
 }
@@ -485,6 +487,8 @@ name : ID
     if (!strcmp($$->sym->data.kind, "variable")) {
         $$->var = emitPrimId($$->sym);
         $$->parent = $$->sym->data.pType;
+    } else if (!strcmp($$->sym->data.kind, "constant")) {
+        $$->var = emitPrimNum($$->sym->data.value);
     }
     $$->expr = NULL;
 }
@@ -493,7 +497,7 @@ name : ID
     if (!strcmp($1->sym->data.kind, "variable")) {
         if ($3->next == NULL) {
             int i = 0;
-            name *pName = $1;
+            memNode *var = $1->var;
             node *component = $1->parent->data.cType;
             if (component != NULL) {
                 memNode *expr = $3;
@@ -505,8 +509,8 @@ name : ID
                   the size of this element, stored in its component type
                 */
 
-                if (pName->var->offset->constant + expr->constant == 0) {
-                    pName->var->offset->value += expr->value 
+                if (var->offset->constant + expr->constant == 0) {
+                    var->offset->value += expr->value 
                                               * component->data.size;
                 } else {
                     memNode *size = (memNode*)malloc(sizeof(memNode));
@@ -514,29 +518,59 @@ name : ID
                     size->value = component->data.size;
 
                     expr = emitMulDiv(expr, size, 1);
-                    pName->var->offset = emitAddSub(pName->var->offset, expr, 1);
+                    var->offset = emitAddSub(var->offset, expr, 1);
                 }
                     
-                pName->parent = component;
-                $$ = pName;
+                $1->parent = component;
+                $$ = $1;
             } else {
                 yyerror("Array access attempted on scalar variable");
             }
         } else {
             yyerror("Too many expressions in array access");
         }
-    } else {
+    } else if(!strcmp($1->sym->data.kind, "procedure")
+              || !strcmp($1->sym->data.kind, "read_routine")
+              || !strcmp($1->sym->data.kind, "write_routine")) {
         if ($1->expr == NULL) {
             $1->expr = $3;
             $$ = $1;
         } else {
             yyerror("Too many expression lists in procedure call");
         }
+    } else {
+        yyerror("Illegal parentheses following identifier");
+        $$ = $1;
     }
 }
 | name '.' ID
 {
-    //do some other stuff
+    if (!strcmp($1->parent->data.kind, "record")) {
+        node *member = $1->parent->data.next;
+
+        while (member != NULL && strcmp(member->data.name, $3)) {
+            member = member->data.next;
+        }
+
+        if (member != NULL) {
+            if ($1->var->offset->constant == 0) {
+                $1->var->offset->value += member->data.offset;
+            } else {
+                memNode *newOffset = (memNode *)malloc(sizeof(memNode));
+                newOffset->value = member->data.offset;
+                newOffset->kind = mallocAndCpy("number");
+                $1->var->offset = emitAddSub($1->var->offset, newOffset, 1);
+            }
+
+            $1->parent = $1->sym->data.pType;
+        } else {
+            yyerror("Undeclared record member used");
+        }
+    } else {
+        yyerror("Variable is not a record");
+    }
+    
+    $$ = $1;
 }
 ;
 
@@ -606,9 +640,9 @@ if_stmt : if_head elsif else_clause ENDIF ';'
 
 if_head : if THEN stmt_list 
 {
-    popPS(instCt + 1, 'p');
     addLabel(instCt, 'p');
     emitJumpQ();
+    popPS(instCt, 'p');
     pushPS('p');
 }
 ;
@@ -617,6 +651,7 @@ if : IF condition
 {
     pushPS('p');
     pushPS('p');
+    memNode *temp = $2;
 
     //this is kind of an unfortunate case where 
     //we need to reference a line either 2 ahead or 1 behind
@@ -628,8 +663,8 @@ if : IF condition
 
 elsif : elsif elseif_head THEN stmt_list
 {
-    popPS(instCt + 1, 'p');
     addLabel(instCt, 'p');
+    popPS(instCt, 'p');
     emitJumpQ();
     pushPS('p');
 }

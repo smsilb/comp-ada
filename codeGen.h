@@ -364,6 +364,30 @@ void emitCopyIn(node *sym, memNode *parm, memNode *expr)
         } else {
             yyerror("Expression passed in place of array parameter");
         }
+    } else if (!strcmp(sym->data.pType->data.kind, "record")) {
+        if (!strcmp(expr->kind, "address")) {
+            node *memDest = sym->data.next, *memSrc = expr->var;
+            if (memDest->data.pType == memSrc->data.pType) {
+                memNode *src, *dest;
+
+                while (memDest != NULL) {
+                    memDest->data.depth = memSrc->data.depth = 0;
+                    dest = emitPrimId(memDest);
+                    src = emitPrimId(memSrc);
+
+                    emitCopyIn(memDest, src, dest);
+
+                    memDest = memDest->data.next;
+                    memSrc = memSrc->data.next;
+                }
+            } else {
+                yyerror("Incompatible record type used as parameter");
+            }
+        } else {
+            yyerror("Expression used in place of record variable \
+                     in procedure call");
+        }
+        //end of record copy
     } else {
         emitAssign(parm, expr);
     }
@@ -373,7 +397,7 @@ emitParamCopyOut(node *proc)
 /*
   helper function which, similarly to emitCopyIn, copies data out
   to different types of variables
- */
+*/
 {
     node *temp = proc->data.next;
 
@@ -753,6 +777,10 @@ emitWrite(memNode *expr)
  */
 {
     fprintf(fp, "%d: write %s\n", instCt++, getLocationString(expr));
+}
+
+emitExcpStateCheck() {
+    fprintf(fp, "%d: pc := ? if r3\n", instCt++);
 }
 
 emitRaise(int eID) 
