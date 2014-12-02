@@ -1,6 +1,4 @@
 %{
-    //extern int yydebug;
-    // yydebug = 1;
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -13,6 +11,7 @@
     symbol getEmptySymbol();
     symbol ref;
     int offset = 4, prevOffset;
+    int inRec = 0;
 
     typedef struct name {
         node *sym;//holds the node returned from the symbol table
@@ -40,7 +39,7 @@
 %type <idList> id_list
 %type <mode> mode
 %type <symbolTablePtr> comp_list parameters var_dec record_head proc_spec
-%type <symbolTablePtr> proc_head proc_init proc_body begin
+%type <symbolTablePtr> proc_head proc_init proc_body begin const_dec
 %type <nameNode> name
 %union {
     int integer;
@@ -295,16 +294,17 @@ array_dec : TYPE ID IS ARRAY '(' constant DOTDOT constant ')' OF type_name ';'
 record_dec : record_head comp_list ENDREC ';' 
 {
     node *temp = $2;
-    ref = $1->data;
+    int recOffset = 0;
+    //ref = $1->data;
     while (temp != NULL) {
-        ref.size += temp->data.size;
+        $1->data.size += temp->data.size;
+        temp->data.offset = recOffset;
+        recOffset += temp->data.size;
         temp = temp->data.next;
     }
-    offset = pop();
-    tabs--;
-    addSymbol(ref);
-    temp = searchStack(ref.name);
-    temp->data.next = $2;
+    //offset = pop();
+    inRec = 0;
+    $1->data.next = $2;
 }
 ;
 
@@ -314,10 +314,11 @@ record_head : TYPE ID IS RECORD
     ref.name = mallocAndCpy($2);
     ref.kind = mallocAndCpy("record");
     ref.size = 0;
-    push($2, offset);
-    $$ = (node*)malloc(sizeof(node));
-    $$->data = ref;
-    tabs++;
+    //push($2, offset);
+    //    $$ = (node*)malloc(sizeof(node));
+    //$$->data = ref;
+    inRec = 1;
+    $$ = addSymbol(ref);
 }
 ;
 
@@ -371,11 +372,11 @@ const_dec : id_list ':' CONSTANT ASSIGN const_expr ';'
     ref.kind = mallocAndCpy("constant");
     ref.value = $5;
     ref.size = ref.pType->data.size;
-    node *returned = addIdsToStack($1, ref);
-    if (returned != NULL) {
+    $$ = addIdsToStack($1, ref);
+    if ($$ != NULL) {
         printf("line %i: ", lineno);
         print(currentList);
-        printf(" constant of value %i\n", returned->data.value);
+        printf(" constant of value %i\n", $$->data.value);
     }
 }
 ;
@@ -395,15 +396,6 @@ excpt_dec : id_list ':' EXCEPTION ';'
 constant : ID 
 {
     node *temp = searchStack($1);
-    /*if (temp == NULL) {
-      char mes[200] = "Var: '";
-      char* s;
-      strcat(mes, $1);
-      strcat(mes, "' is not defined in this context");
-      s = (char*)malloc(sizeof(mes)+1);
-      strcpy(s, mes);
-      yyerror(s);
-      }*/
     $$ = temp->data.value;
 }
 | NUMBER 
@@ -469,14 +461,13 @@ call_stmt : name optAssign ';'
         } else if (!strcmp(proc->data.kind, "variable")
                    || !strcmp(proc->data.kind, "parm")) {
             memNode* id;
-            id = $1->var;
-            id->offset->value -= proc->data.pType->data.lower;
-            
-            
+            id = $1->var;        
 
             emitAssign(id, $2);
             proc->data.reg = NULL;
         } else {
+            //baseReg is just to use the same register with 'b' stored
+            //in it throughout the different instructions emitted
             int baseReg = emitProcCall(proc);
 
             emitParamCopyIn(proc, temp, baseReg);
@@ -502,41 +493,37 @@ name : ID
     if (!strcmp($1->sym->data.kind, "variable")) {
         if ($3->next == NULL) {
             int i = 0;
-            node *temp = $1->parent;
-            memNode *expr = $3;
             name *pName = $1;
-            
+            node *component = $1->parent->data.cType;
+            if (component != NULL) {
+                memNode *expr = $3;
+                /*
+                  if the symbol is a var, not a procedure, we need to generally
+                  increase the offset according to whatever 'position' in a 
+                  single or multi dimensional array this might be.
+                  In order to do so, we need to multiply the expression by
+                  the size of this element, stored in its component type
+                */
 
-            /*
-              if the symbol is an var, not a procedure, we need to generally
-              increase the offset according to whatever 'position' in a 
-              single or multi dimensional array this might be.
-              In order to do so, we need to multiply the expression by
-              the size of this element, stored in its component type
-            */
+                if (pName->var->offset->constant + expr->constant == 0) {
+                    pName->var->offset->value += expr->value 
+                                              * component->data.size;
+                } else {
+                    memNode *size = (memNode*)malloc(sizeof(memNode));
+                    size->kind = mallocAndCpy("number");                
+                    size->value = component->data.size;
 
-            if (pName->var->offset->constant + expr->constant == 0) {
-                pName->var->offset->value += (expr->value  - temp->data.lower) 
-                    * temp->data.size;
+                    expr = emitMulDiv(expr, size, 1);
+                    pName->var->offset = emitAddSub(pName->var->offset, expr, 1);
+                }
+                    
+                pName->parent = component;
+                $$ = pName;
             } else {
-                memNode *size = (memNode*)malloc(sizeof(memNode));
-                size->kind = mallocAndCpy("number");
-                    
-                //take advantage of size to do necessary subtraction
-                size->value = temp->data.lower;
-                expr = emitAddSub(expr, size, -1);
-
-                //multiply the result by the real size
-                size->value = temp->data.size;
-                expr = emitMulDiv(expr, size, 1);
-                pName->var->offset = emitAddSub(pName->var->offset, expr, 1);
+                yyerror("Array access attempted on scalar variable");
             }
-                    
-               
-            pName->parent = temp->data.cType;
-            $$ = pName;
         } else {
-            yyerror("Too many expression in array access");
+            yyerror("Too many expressions in array access");
         }
     } else {
         if ($1->expr == NULL) {
@@ -547,6 +534,10 @@ name : ID
         }
     }
 }
+| name '.' ID
+{
+    //do some other stuff
+}
 ;
 
 optAssign : ASSIGN expression
@@ -554,9 +545,9 @@ optAssign : ASSIGN expression
     $$ = $2;
 }
 |
-    {
-        $$ = NULL;
-    }
+{
+    $$ = NULL;
+}
 ;
 
 expr_list : expression ',' expr_list
@@ -597,7 +588,6 @@ loop_stmt_list : statement loop_stmt_list
 exit : EXIT ';' 
 {
     addLabel(instCt, 'p');
-
     emitJumpQ();
 }
 | EXITWHEN condition ';' 
@@ -644,7 +634,7 @@ elsif : elsif elseif_head THEN stmt_list
     pushPS('p');
 }
 | 
-    {}
+{}
 ;
 
 elseif_head : ELSEIF condition
@@ -911,38 +901,9 @@ primary : NUMBER
 {
     $$ = emitPrimNum($1);
 }
-| ID 
+| name
 {
-    node *idPtr = searchStack($1);
-    if (idPtr == NULL) {
-        char mes[200];
-        sprintf(mes, "Var: %s is not defined in this context", $1);
-        yyerror(mes);
-    } else {
-        if (!strcmp(idPtr->data.kind, "constant")) {
-            $$ = emitPrimNum(idPtr->data.value);
-        } else {
-            $$ = emitPrimId(idPtr);
-        }
-    }
-}
-| ID '(' expression  ')'
-{
-    node *idPtr = searchStack($1);
-    if (idPtr == NULL) {
-        char mes[200];
-        sprintf(mes, "Var: %s is not defined in this context", $1);
-        yyerror(mes);
-    } else {
-        $$ = emitPrimId(idPtr);
-        $$->offset->value -= idPtr->data.pType->data.lower;
-
-        if ($3->constant == 0) {
-            $$->offset->value += $3->value;
-        } else {
-            $$->offset = emitAddSub($3, $$->offset, 1);
-        }
-    } 
+    $$ = $1->var;
 }
 | '(' expression ')' 
 {
@@ -1099,27 +1060,41 @@ node* addIdsToStack(idnodeptr idList, symbol ref) {
         ref.name = mallocAndCpy(temp->name);
         ref.offset = offset;
     
-        if (prev == NULL) {
-            prev = addSymbol(ref);
-        } else {
-            prev->data.next = addSymbol(ref);
-            prev = prev->data.next;
-        }
+        if (!inRec) {
+            if (prev == NULL) {
+                prev = addSymbol(ref);
+            } else {
+                prev->data.next = addSymbol(ref);
+                prev = prev->data.next;
+            }
 
-        if (prev != NULL) {
-            if (!strcmp(prev->data.kind, "variable")) {
-                offset += prev->data.size;
-            } else if (!strcmp(prev->data.kind, "exception")) {
-                prev->data.value = nextException();
-            } else if (!strcmp(prev->data.kind, "parm")) {
-                //parameters that will be copied out need an additional
-                //space to store the address to copy to
-                if (!strcmp(prev->data.mode, "io")
-                    || !strcmp(prev->data.mode, "o")) {
-                    prev->data.size++;
+            if (prev != NULL) {
+                if (!strcmp(prev->data.kind, "variable")) {
+                    if (!strcmp(prev->data.pType->data.kind, "array")) {
+                        prev->data.offset -= prev->data.pType->data.lower;
+                    }
+                    offset += prev->data.size;
+                } else if (!strcmp(prev->data.kind, "exception")) {
+                    prev->data.value = nextException();
+                } else if (!strcmp(prev->data.kind, "parm")) {
+                    //parameters that will be copied out need an additional
+                    //space to store the address to copy to
+                    if (!strcmp(prev->data.mode, "io")
+                        || !strcmp(prev->data.mode, "o")) {
+                        prev->data.size++;
+                    }
+
+                    offset += prev->data.size;
                 }
-
-                offset += prev->data.size;
+            }
+        } else {
+            if (prev == NULL) {
+                prev = (node *)malloc(sizeof(node));
+                prev->data = ref;
+            } else {
+                prev->data.next = (node *)malloc(sizeof(node));
+                prev = prev->data.next;
+                prev->data = ref;
             }
         }
 

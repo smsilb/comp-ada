@@ -90,6 +90,9 @@ int nextException() {
 
 outerContext(){
     symbol oc;
+    oc.pType = NULL;
+    oc.cType = NULL;
+
     oc.name = mallocAndCpy("integer");
     oc.kind = mallocAndCpy("predefined");
     oc.size = 1;

@@ -185,7 +185,7 @@ emitPrologue()
 {
     fprintf(fp, "%d: b := ?\n", instCt++);
     fprintf(fp, "%d: contents b, 0 := ?\n", instCt++);
-    fprintf(fp, "%d: contents b, 1 := 4\n", instCt++);
+    fprintf(fp, "%d: contents b, 1 := 7\n", instCt++);
     fprintf(fp, "%d: r%d := 0\n", instCt++, newReg());
     fprintf(fp, "%d: r%d := 1\n", instCt++, newReg());
     //this one is for exceptions
@@ -729,9 +729,9 @@ emitJumpFalse(memNode *condition)
     int result = getResultReg(condition, condition);
     //    fprintf(fp, "instCt is %d\n", instCt);
     //compare value to zero
-    fprintf(fp, "%d: r%d := r%d = r1\n", instCt++, result, op1);
+    //    fprintf(fp, "%d: r%d := r%d = r1\n", instCt++, result, op1);
     
-    fprintf(fp, "%d: pc := ? if r%d\n", instCt++, result);
+    fprintf(fp, "%d: pc := ? if not r%d\n", instCt++, result);
 }
 
 emitRead(memNode *var) 
