@@ -66,11 +66,11 @@ printNode(node *root){
     } else if (!strcmp(root->data.kind, "record")) {
         node *temp = root->data.next;
         printf(", with members:\n");
-        /* while(temp != NULL) {
+        while(temp != NULL) {
             printTabs(tabs);
             printf("\t%s: %s with size %d and offset %d\n", temp->data.name, temp->data.kind, temp->data.size, temp->data.offset);
             temp = temp->data.next;
-            }*/
+        }
     }
     printf("\n");
     if (root->right != NULL){
@@ -173,4 +173,21 @@ addReserved(char* s) {
 
 int checkReserved(char *s) {
 
+}
+
+int isVariable(node *sym) {
+    if (!strcmp(sym->data.kind, "variable")
+        ||!strcmp(sym->data.kind, "parm"))
+        return 1;
+    
+    return 0;
+}
+
+int isProcedure(node *sym) {
+    if (!strcmp(sym->data.kind, "proc")
+        ||!strcmp(sym->data.kind, "read_routine")
+        ||!strcmp(sym->data.kind, "write_routine"))
+        return 1;
+    
+    return 0;
 }

@@ -365,12 +365,15 @@ void emitCopyIn(node *sym, memNode *parm, memNode *expr)
             yyerror("Expression passed in place of array parameter");
         }
     } else if (!strcmp(sym->data.pType->data.kind, "record")) {
-        if (!strcmp(expr->kind, "address")) {
-            node *memDest = sym->data.next, *memSrc = expr->var;
-            if (memDest->data.pType == memSrc->data.pType) {
-                memNode *src, *dest;
+        node *memDest = sym->data.next, *memSrc;
+        memNode *src, *dest;
+        if (sym->data.pType == expr->var->data.pType) {
+            while (memDest != NULL) {
+                if (!strcmp(expr->kind, "address")) {
+                    memSrc = expr->var;
 
-                while (memDest != NULL) {
+
+             
                     memDest->data.depth = memSrc->data.depth = 0;
                     dest = emitPrimId(memDest);
                     src = emitPrimId(memSrc);
@@ -378,14 +381,16 @@ void emitCopyIn(node *sym, memNode *parm, memNode *expr)
                     emitCopyIn(memDest, src, dest);
 
                     memDest = memDest->data.next;
-                    memSrc = memSrc->data.next;
-                }
-            } else {
-                yyerror("Incompatible record type used as parameter");
-            }
-        } else {
-            yyerror("Expression used in place of record variable \
+                    expr = expr->next;
+               
+                
+                } else {
+                    yyerror("Expression used in place of record variable \
                      in procedure call");
+                }
+            } 
+        } else {
+            yyerror("Incompatible record type used as parameter");
         }
         //end of record copy
     } else {

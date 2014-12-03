@@ -329,7 +329,6 @@ comp_list : var_dec comp_list
 }
 | var_dec 
 {
-    $1->data.next = NULL;
     $$ = $1;
 }
 ;
@@ -356,8 +355,9 @@ var_dec : id_list ':' type_name ';'
     ref.kind = mallocAndCpy("variable");
     ref.size = ref.pType->data.size;
     ref.reg = NULL;
+    ref.next = NULL;
     $$ = addIdsToStack($1, ref);
-    if ($$ != NULL) {
+    if ($$ != NULL && !inRec) {
         printf("line %i: ", lineno);
         print(currentList);
         printf(" of type %s\n", $$->data.pType->data.name);
@@ -458,8 +458,7 @@ call_stmt : name optAssign ';'
                 }
                 temp = temp->next;
             }
-        } else if (!strcmp(proc->data.kind, "variable")
-                   || !strcmp(proc->data.kind, "parm")) {
+        } else if (isVariable(proc)) {
             memNode* id;
             id = $1->var;        
 
@@ -484,7 +483,7 @@ name : ID
 {
     $$ = (name*)malloc(sizeof(name));
     $$->sym = searchStack($1);
-    if (!strcmp($$->sym->data.kind, "variable")) {
+    if (isVariable($$->sym)) {
         $$->var = emitPrimId($$->sym);
         $$->parent = $$->sym->data.pType;
     } else if (!strcmp($$->sym->data.kind, "constant")) {
@@ -494,7 +493,7 @@ name : ID
 }
 | name '(' expr_list ')'
 {
-    if (!strcmp($1->sym->data.kind, "variable")) {
+    if (isVariable($1->sym)) {
         if ($3->next == NULL) {
             int i = 0;
             memNode *var = $1->var;
@@ -529,9 +528,7 @@ name : ID
         } else {
             yyerror("Too many expressions in array access");
         }
-    } else if(!strcmp($1->sym->data.kind, "procedure")
-              || !strcmp($1->sym->data.kind, "read_routine")
-              || !strcmp($1->sym->data.kind, "write_routine")) {
+    } else if (isProcedure($1->sym)) {
         if ($1->expr == NULL) {
             $1->expr = $3;
             $$ = $1;
@@ -562,7 +559,7 @@ name : ID
                 $1->var->offset = emitAddSub($1->var->offset, newOffset, 1);
             }
 
-            $1->parent = $1->sym->data.pType;
+            $1->parent = member->data.pType;
         } else {
             yyerror("Undeclared record member used");
         }
@@ -711,6 +708,7 @@ raise_stmt : RAISE ID ';'
     if (excpt == NULL) {
         yyerror("Undeclared exception raised");
     } else {
+        currentException = excpt->data.value;
         emitRaise(excpt->data.value);
         addLabel(instCt - 1, 'e');
     }
@@ -1030,10 +1028,9 @@ excpt_stmt_list : excpt_stmt_list statement
 {
     //reraising the current exception functions by jumping
     //out of the exception part
-    addLabel(instCt, 'r');
-    emitJumpQ();
+    emitRaise(currentException);
 }
-| statement
+| 
 ;
 
 choice_list : choice_list '|' ID 
@@ -1089,7 +1086,7 @@ idnodeptr currentList = NULL;
 node* addIdsToStack(idnodeptr idList, symbol ref) {
     idnodeptr temp = idList;
     node* next = ref.next;
-    node* prev = NULL;
+    node* prev = NULL, *head = NULL;
 
     while(temp->next != NULL) {
         ref.name = mallocAndCpy(temp->name);
@@ -1098,6 +1095,7 @@ node* addIdsToStack(idnodeptr idList, symbol ref) {
         if (!inRec) {
             if (prev == NULL) {
                 prev = addSymbol(ref);
+                head = prev;
             } else {
                 prev->data.next = addSymbol(ref);
                 prev = prev->data.next;
@@ -1126,6 +1124,7 @@ node* addIdsToStack(idnodeptr idList, symbol ref) {
             if (prev == NULL) {
                 prev = (node *)malloc(sizeof(node));
                 prev->data = ref;
+                head = prev;
             } else {
                 prev->data.next = (node *)malloc(sizeof(node));
                 prev = prev->data.next;
@@ -1142,7 +1141,7 @@ node* addIdsToStack(idnodeptr idList, symbol ref) {
         return NULL;
     }
 
-    return search(stack[top].root, idList->name);
+    return head;
 }
 
 main()
