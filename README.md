@@ -14,9 +14,10 @@ It is written in C using lex/yacc, so it use it you'll need lex/yacc installed (
 
 Comp Ada provides support for:
 
-     *integers, and all thereby derived types (i.e. booleans)
-     *arrays (simple and complex)
-     *records (simple and complex)
+     *integers and booleans
+     *arrays (simple and nested)
+     *records (simple and nested)
+     *mixed records and arrays
      *ranges
      *procedures (with and without parameters)
      *while loops w/ exit/exit when statements

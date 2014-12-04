@@ -350,24 +350,25 @@ void emitCopyIn(node *sym, memNode *parm, memNode *expr)
   on context
 */
 {
-    if (!strcmp(sym->data.pType->data.kind, "array")) {
-        if (!strcmp(expr->kind, "address")) {
-            int i;
-            int elements = sym->data.pType->data.upper
-                - sym->data.pType->data.lower + 1;
+    //if (sym->data.pType == expr->var->data.pType) {
+        if (!strcmp(sym->data.pType->data.kind, "array")) {
+            if (!strcmp(expr->kind, "address")) {
+                int i;
+                int elements = sym->data.pType->data.upper
+                    - sym->data.pType->data.lower + 1;
                 
-            for (i = 0; i < elements; i++) {
-                emitAssign(parm, expr);
-                parm->offset->value++;
-                expr->offset->value++;
+                for (i = 0; i < elements; i++) {
+                    emitAssign(parm, expr);
+                    parm->offset->value++;
+                    expr->offset->value++;
+                }
+            } else {
+                yyerror("Expression passed in place of array parameter");
             }
-        } else {
-            yyerror("Expression passed in place of array parameter");
-        }
-    } else if (!strcmp(sym->data.pType->data.kind, "record")) {
-        node *memDest = sym->data.next, *memSrc;
-        memNode *src, *dest;
-        if (sym->data.pType == expr->var->data.pType) {
+        } else if (!strcmp(sym->data.pType->data.kind, "record")) {
+            node *memDest = sym->data.next, *memSrc;
+            memNode *src, *dest;
+        
 
             int i, elements = sym->data.size;
 
@@ -381,13 +382,14 @@ void emitCopyIn(node *sym, memNode *parm, memNode *expr)
                 parm->offset->value++;
                 expr->offset->value++;
             }
+        
+            //end of record copy
         } else {
-            yyerror("Incompatible record type used as parameter");
+            emitAssign(parm, expr);
         }
-        //end of record copy
-    } else {
-        emitAssign(parm, expr);
-    }
+        /*} else {
+        yyerror("Incompatible type used as parameter");
+        }*/
 }
 
 emitParamCopyOut(node *proc) 

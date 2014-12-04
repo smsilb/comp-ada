@@ -468,6 +468,8 @@ call_stmt : name optAssign ';'
         } else {
             //baseReg is just to use the same register with 'b' stored
             //in it throughout the different instructions emitted
+
+            //printf("calling procedure with %s parameter\n", proc->data.pType->data.name);
             int baseReg = emitProcCall(proc);
 
             emitParamCopyIn(proc, temp, baseReg);
@@ -489,6 +491,7 @@ name : ID
         $$->parent = $$->sym->data.pType;
     } else if (!strcmp($$->sym->data.kind, "constant")) {
         $$->var = emitPrimNum($$->sym->data.value);
+        $$->parent = NULL;
     }
     $$->expr = NULL;
 }
@@ -559,7 +562,7 @@ name : ID
                 newOffset->kind = mallocAndCpy("number");
                 $1->var->offset = emitAddSub($1->var->offset, newOffset, 1);
             }
-
+            
             $1->parent = member->data.pType;
         } else {
             yyerror("Undeclared record member used");
