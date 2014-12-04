@@ -368,27 +368,19 @@ void emitCopyIn(node *sym, memNode *parm, memNode *expr)
         node *memDest = sym->data.next, *memSrc;
         memNode *src, *dest;
         if (sym->data.pType == expr->var->data.pType) {
-            while (memDest != NULL) {
-                if (!strcmp(expr->kind, "address")) {
-                    memSrc = expr->var;
 
+            int i, elements = sym->data.size;
 
-             
-                    memDest->data.depth = memSrc->data.depth = 0;
-                    dest = emitPrimId(memDest);
-                    src = emitPrimId(memSrc);
+            if (!strcmp(sym->data.mode, "io")
+                ||!strcmp(sym->data.mode, "o")) {
+                elements--;
+            }
 
-                    emitCopyIn(memDest, src, dest);
-
-                    memDest = memDest->data.next;
-                    expr = expr->next;
-               
-                
-                } else {
-                    yyerror("Expression used in place of record variable \
-                     in procedure call");
-                }
-            } 
+            for (i = 0; i < elements; i++) {
+                emitAssign(parm, expr);
+                parm->offset->value++;
+                expr->offset->value++;
+            }
         } else {
             yyerror("Incompatible record type used as parameter");
         }
@@ -421,32 +413,47 @@ void emitCopyOut(node *parm)
   used to copy data out from parameters back to the provided variables
  */
 {
+    int i, size;
+
+    parm->data.reg = NULL;
     //get a memory node for the data
-    memNode *contents = emitPrimId(parm);
+    memNode *src = emitPrimId(parm);
 
     //get a memory node for the address to 
     //copy to
-    memNode *address = emitPrimId(parm);
-    address->offset->value += parm->data.size - 1;
-    address->base = getRegister(address);
+    memNode *dest = emitPrimId(parm);
+    dest->offset->value += parm->data.size - 1;
+    dest->base = getRegister(dest);
 
     //this is just for the sake of printing
-    address->offset->value = 0;
+    dest->offset->value = 0;
 
-    if (!strcmp(parm->data.pType->data.kind, "array")) {
-        int i;
-        int elements = parm->data.pType->data.upper
-            - parm->data.pType->data.lower + 1;
-                
-        fprintf(fp, "copying arrays\n");
-        for (i = 0; i < elements; i++) {
-            emitAssign(address, contents);
-            address->offset->value++;
-            contents->offset->value++;
-        }
-    } else {
-        emitAssign(address, contents);
+    size = parm->data.size - 1;
+
+    for (i = 0; i < size; i++) {
+        emitAssign(dest, src);
+        dest->offset->value++;
+        src->offset->value++;
     }
+
+    /* if (!strcmp(parm->data.pType->data.kind, "array")) { */
+    /*     int i; */
+    /*     int elements = parm->data.pType->data.upper */
+    /*         - parm->data.pType->data.lower + 1; */
+                
+    /*     fprintf(fp, "copying arrays\n"); */
+    /*     for (i = 0; i < elements; i++) { */
+    /*         emitAssign(dest, src); */
+    /*         dest->offset->value++; */
+    /*         src->offset->value++; */
+    /*     } */
+    /* } else if (!strcmp(parm->data.pType->data.kind, "record")) { */
+    /*     node *temp = parm->data.next; */
+
+        
+    /* } else { */
+    /*     emitAssign(dest, src); */
+    /* } */
 }
 
 emitProcJump(node *proc, int base) 

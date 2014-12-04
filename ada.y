@@ -102,6 +102,7 @@ proc_spec : proc_head IS decl_part proc_body
 {
     //now that we've seen the whole procedure we store the data
     //we'd previously saved, and print the code for a return statement
+    node *proc = $1;
     if ($1 != NULL) {
         $1->data.offset = $4->data.offset;
         $1->data.address = $4->data.address;
