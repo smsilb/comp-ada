@@ -293,6 +293,12 @@ emitParamCopyIn(node *proc, memNode *expr, int base)
             //put the parameter in a memory node
             memNode *parm = emitPrimId(temp);
 
+            if (!strcmp(expr->kind, "address")) {                
+                if (expr->base == 0) {
+                    expr->base = base;
+                }
+            }
+
 
             if (isParmIn(temp)) {
                 //we always need to do some sort of 'walkback'
