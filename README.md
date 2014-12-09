@@ -14,14 +14,23 @@ It is written in C using lex/yacc, so it use it you'll need lex/yacc installed (
 
 Comp Ada provides support for:
 
-     *integers and booleans
-     *arrays (simple and nested)
-     *records (simple and nested)
-     *mixed records and arrays
-     *ranges
-     *procedures (with and without parameters)
-     *while loops w/ exit/exit when statements
-     *if/elsif/else statements
-     *exceptions and raise statements
-     *simple i/o
+     *Integers and booleans
+     *Arrays (simple and nested)
+       *Array access syntax: foo(bar)
+       *Nested arrays are arrays of arrays
+     *Records (simple and nested)
+       *Record access syntax: foo.bar
+       *Nested records are records of records
+       *Mixed array and record types are allowed
+     *Procedures (with and without parameters)
+       *Recursion should work, but is untested	
+     *While loops w/ exit/exit when statements
+     *If/elsif/else statements
+       *Both conditionals and loops allow arbitrary levels of nesting
+     *Exceptions and raise statements
+       *Explicit raises only, i.e. no exceptions are raised for divide by zero, invalid array accesses, etc.
+     *Simple i/o
+       *Read booleans & integers into a variable
+       *Write an expression
+       *Reading and writing assume a fictional STDIN/STDOUT as sources
      
