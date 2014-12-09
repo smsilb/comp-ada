@@ -710,7 +710,6 @@ raise_stmt : RAISE ID ';'
     if (excpt == NULL) {
         yyerror("Undeclared exception raised");
     } else {
-        currentException = excpt->data.value;
         emitRaise(excpt->data.value);
         addLabel(instCt - 1, 'e');
     }
@@ -1030,9 +1029,15 @@ excpt_stmt_list : excpt_stmt_list statement
 {
     //reraising the current exception functions by jumping
     //out of the exception part
-    emitRaise(currentException);
+    addLabel(instCt, 'e');
+    emitJumpQ();
 }
-| 
+| statement
+| RAISE ';'
+{
+    addLabel(instCt, 'e');
+    emitJumpQ();
+}
 ;
 
 choice_list : choice_list '|' ID 

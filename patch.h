@@ -18,7 +18,6 @@ int raiseTop = -1;
 int patchTop = -1;
 int inExceptionPart;
 int handlerDone;
-int currentException = 0;
 int jumpTable[100];
 int jumpCount = 0;
 
