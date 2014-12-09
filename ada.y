@@ -468,8 +468,6 @@ call_stmt : name optAssign ';'
         } else {
             //baseReg is just to use the same register with 'b' stored
             //in it throughout the different instructions emitted
-
-            //printf("calling procedure with %s parameter\n", proc->data.pType->data.name);
             int baseReg = emitProcCall(proc);
 
             emitParamCopyIn(proc, temp, baseReg);
@@ -1151,8 +1149,7 @@ node* addIdsToStack(idnodeptr idList, symbol ref) {
 main()
 {
 
-    fp = fopen ("joe.sucks", "w+");
-    //fp = fopen("out.txt", "w+");
+    fp = fopen ("prepatched.txt", "w+");
    
     printf("Outer context\n");
     outerContext();
@@ -1164,10 +1161,10 @@ main()
     unlink("out.txt");
 
     if (!error) {
-        writePatches("joe.sucks", lineno);
+        writePatches("prepatched.txt", lineno);
     }
 
-    unlink("joe.sucks");
+    unlink("prepatched.txt");
     
     return(0);
 }
