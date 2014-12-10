@@ -48,13 +48,12 @@
     struct node* symbolTablePtr;
     struct memNode* memNode;
     struct name *nameNode;
-    //struct stackNode exprList[100];
 }
 %%
 
 program  : prog_head IS decl_part proc_body 
 {
-    printf("OK\n");
+    printf("Compilation complete\n");
     emitReturn();
 
     //add patch for end of code/beginning of main's AR
@@ -123,7 +122,6 @@ proc_head : proc_init '(' parameters ')'
     //copy all of the parameter data into a tail hanging off
     //of the procedure node stored in $1
     if ($1 != NULL) {
-        //$1->data.next = $3;
         node *temp = $3;
         node *param = (node*)malloc(sizeof(node));
         param->data = temp->data;
@@ -157,18 +155,16 @@ proc_init : PROCEDURE ID
     ref.kind = mallocAndCpy("proc");
     ref.next = NULL;
     $$ = addSymbol(ref);
-    printTabs(tabs);
+    //printTabs(tabs);
     push($2, offset);
     offset = 4;
-    //printf("storing offset as %d, setting it to 4\n", offset);
-    //    prevOffset = offset;
     tabs++;
 }
 ;
 
 proc_body : begin stmt_list excpt_part END ';' 
 {
-    printTabs(tabs);
+    //printTabs(tabs);
     offset = pop();
     tabs--;
     $$ = $1;
@@ -183,9 +179,9 @@ parameters :  id_list ':' mode type_name ';' parameters
     ref.size = ref.pType->data.size;
     ref.next = $6;
     $$ = addIdsToStack($1, ref);
-    printf("line %i: ", lineno);
-    print($1);
-    printf(" - %s parameter of type %s\n", ref.mode, ref.pType->data.name);
+    //printf("line %i: ", lineno);
+    //print($1);
+    //printf(" - %s parameter of type %s\n", ref.mode, ref.pType->data.name);
 }
 | id_list ':' mode type_name 
 {
@@ -196,9 +192,9 @@ parameters :  id_list ':' mode type_name ';' parameters
     ref.size = ref.pType->data.size;
     ref.next = NULL;
     $$ = addIdsToStack($1, ref);
-    printf("line %i: ", lineno);
-    print($1);
-    printf(" - %s parameter of type %s\n", $$->data.mode, $$->data.pType->data.name);
+    //printf("line %i: ", lineno);
+    //print($1);
+    //printf(" - %s parameter of type %s\n", $$->data.mode, $$->data.pType->data.name);
 }
 ;
 
@@ -288,7 +284,7 @@ array_dec : TYPE ID IS ARRAY '(' constant DOTDOT constant ')' OF type_name ';'
     ref.lower = $6;
     ref.upper = $8;
     addSymbol(ref);
-    printf("line %i: array type %s of %s from %i to %i\n", lineno, $2, $11, $6, $8);
+    //printf("line %i: array type %s of %s from %i to %i\n", lineno, $2, $11, $6, $8);
 }
 ;
 
@@ -296,14 +292,12 @@ record_dec : record_head comp_list ENDREC ';'
 {
     node *temp = $2;
     int recOffset = 0;
-    //ref = $1->data;
     while (temp != NULL) {
         $1->data.size += temp->data.size;
         temp->data.offset = recOffset;
         recOffset += temp->data.size;
         temp = temp->data.next;
     }
-    //offset = pop();
     inRec = 0;
     $1->data.next = $2;
 }
@@ -315,9 +309,6 @@ record_head : TYPE ID IS RECORD
     ref.name = mallocAndCpy($2);
     ref.kind = mallocAndCpy("record");
     ref.size = 0;
-    //push($2, offset);
-    //    $$ = (node*)malloc(sizeof(node));
-    //$$->data = ref;
     inRec = 1;
     $$ = addSymbol(ref);
 }
@@ -344,7 +335,7 @@ type_dec : TYPE ID IS RANGE constant DOTDOT constant ';'
     ref.lower = $5;
     ref.upper = $7;
     addSymbol(ref);
-    printf("line %i: type %s defined\n", lineno, $2);
+    //printf("line %i: type %s defined\n", lineno, $2);
 }
 
 ;
@@ -358,11 +349,11 @@ var_dec : id_list ':' type_name ';'
     ref.reg = NULL;
     ref.next = NULL;
     $$ = addIdsToStack($1, ref);
-    if ($$ != NULL && !inRec) {
-        printf("line %i: ", lineno);
-        print(currentList);
-        printf(" of type %s\n", $$->data.pType->data.name);
-    }
+    //if ($$ != NULL && !inRec) {
+        //printf("line %i: ", lineno);
+        //print(currentList);
+        //printf(" of type %s\n", $$->data.pType->data.name);
+    //}
 }
 ;
 
@@ -374,11 +365,11 @@ const_dec : id_list ':' CONSTANT ASSIGN const_expr ';'
     ref.value = $5;
     ref.size = ref.pType->data.size;
     $$ = addIdsToStack($1, ref);
-    if ($$ != NULL) {
-        printf("line %i: ", lineno);
-        print(currentList);
-        printf(" constant of value %i\n", $$->data.value);
-    }
+    //if ($$ != NULL) {
+        //printf("line %i: ", lineno);
+        //print(currentList);
+        //printf(" constant of value %i\n", $$->data.value);
+    //}
 }
 ;
 
@@ -388,9 +379,9 @@ excpt_dec : id_list ':' EXCEPTION ';'
     ref.pType = NULL;
     ref.kind = mallocAndCpy("exception");
     addIdsToStack($1, ref);
-    printf("line %i: ", lineno);
-    print(currentList);
-    printf(" : exception\n");
+    //printf("line %i: ", lineno);
+    //print(currentList);
+    //printf(" : exception\n");
 }
 ;
 
@@ -948,7 +939,7 @@ primary : NUMBER
 excpt_part : exception handle_list 
 {
     //pop the jumps to the table at the beginning
-    popPS(instCt, 'p');
+    popPS(instCt - 1, 'p');
 
     jumpTable[0] = instCt + next_exception;
 
@@ -1156,9 +1147,9 @@ main()
 
     fp = fopen ("prepatched.txt", "w+");
    
-    printf("Outer context\n");
+    //printf("Outer context\n");
     outerContext();
-    printNode(stack[0].root);
+    //printNode(stack[0].root);
     yyparse();
 
     fclose(fp);

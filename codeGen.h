@@ -299,18 +299,18 @@ emitParamCopyIn(node *proc, memNode *expr, int base)
                 }
             }
 
+            //we always need to do some sort of 'walkback'
+            //since we're sort of in between scopes,
+            //so we need to make sure we will use the previously
+            //stored base instead of the current one
+            if (expr->base == 0) {
+                //we're sort of cheating here by
+                //just using the most recently allocated register
+                expr->base = base;
+            }
+
 
             if (isParmIn(temp)) {
-                //we always need to do some sort of 'walkback'
-                //since we're sort of in between scopes,
-                //so we need to make sure we will use the previously
-                //stored base instead of the current one
-                if (expr->base == 0) {
-                    //we're sort of cheating here by
-                    //just using the most recently allocated register
-                    expr->base = base;
-                }
-
                 emitCopyIn(temp, parm, expr);
 
                 if (isParmOut(temp)) {
@@ -333,7 +333,7 @@ emitParamCopyIn(node *proc, memNode *expr, int base)
                     //rather than changing the entire
                     //way i do addition for this one exception, i manually
                     //do the necessary register manipulation here
-                    fprintf(fp, "%d: r%d := r%d + r%d\n", instCt++, offset, offset, base);
+                    fprintf(fp, "%d: r%d := r%d + r%d\n", instCt++, offset, offset, expr->base);
                     add->base = nextReg;
                     add->kind = mallocAndCpy("register");
                     emitAssign(parm, add);
@@ -770,12 +770,12 @@ emitJumpFalse(memNode *condition)
 {
     int op1 = getRegister(condition);
 
-    int result = getResultReg(condition, condition);
+    //int result = getResultReg(condition, condition);
     //    fprintf(fp, "instCt is %d\n", instCt);
     //compare value to zero
     //    fprintf(fp, "%d: r%d := r%d = r1\n", instCt++, result, op1);
     
-    fprintf(fp, "%d: pc := ? if not r%d\n", instCt++, result);
+    fprintf(fp, "%d: pc := ? if not r%d\n", instCt++, op1);
 }
 
 emitRead(memNode *var) 

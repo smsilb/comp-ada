@@ -71,7 +71,7 @@ push(char* name, int offset) {
       temp.name = (char*)malloc(sizeof(name)+1);
       strcpy(temp.name, name);
       stack[top] = temp;
-      printf("Pushing scope for %s\n", name);
+      //printf("Pushing scope for %s\n", name);
   } else {
       yyerror("Stack is full and you, the end user, know what this means since you wrote this compiler\n");
   }
@@ -91,10 +91,10 @@ deleteNode(node* root) {
 // with it
 int pop() {
   if (top >= 0) {
-    printf("Popping scope for %s\n", stack[top].name);
-    if (stack[top].root != NULL) {
-        printNode(stack[top].root);
-    }
+      //printf("Popping scope for %s\n", stack[top].name);
+      //if (stack[top].root != NULL) {
+      //printNode(stack[top].root);
+      //}
     deleteNode(stack[top].root);
     top--;
     return stack[top].ARsize;

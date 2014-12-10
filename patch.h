@@ -23,13 +23,21 @@ int jumpCount = 0;
 
 pushPS(char c) {
     if (c == 'p') {
-        patchTop++;
-        toPatch[patchTop] = NULL;
-        lhead = ltail = toPatch[patchTop];
+        if (patchTop == 100) {
+            yyerror("Nesting depth exceeded 100");
+        } else {
+            patchTop++;
+            toPatch[patchTop] = NULL;
+            lhead = ltail = toPatch[patchTop];
+        }
     } else if (c == 'e') {
-        raiseTop++;
-        raiseStack[raiseTop] = NULL;
-        raiseHead = raiseTail = raiseStack[raiseTop];
+        if (raiseTop == 100) {
+            yyerror("Nesting depth exceeded 100");
+        } else {
+            raiseTop++;
+            raiseStack[raiseTop] = NULL;
+            raiseHead = raiseTail = raiseStack[raiseTop];
+        }
     }
 }
 
